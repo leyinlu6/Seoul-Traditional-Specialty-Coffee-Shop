@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>서울 전통·특색 카페 지도</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+g3kGkNf0v1g7b2b2l0q9bqzYqkYv1Yk5r5v0qv+M=" crossorigin=""/>
+  <style>
+    body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Noto Sans KR", sans-serif; }
+    #map { position: absolute; top:0; bottom:0; left:300px; right:0; }
+    #sidebar { position:absolute; left:0; top:0; bottom:0; width:300px; overflow:auto; background:#fff; border-right:1px solid #ddd; padding:12px; }
+    .place { padding:8px; border-bottom:1px solid #eee; cursor:pointer; }
+    .place:hover { background:#f6f6f6; }
+    .place img { width:64px; height:48px; object-fit:cover; margin-right:8px; vertical-align:middle; }
+    .place h4 { margin:0 0 4px 0; font-size:14px; }
+    .place p { margin:0; font-size:12px; color:#555; }
+    .topbar { font-weight:700; margin-bottom:8px; }
+    .search { width:100%; padding:6px; margin-bottom:8px; box-sizing:border-box; }
+    .popup-img { width:200px; height:120px; object-fit:cover; display:block; margin-bottom:6px; }
+    a.naver-link { display:inline-block; margin-top:6px; background:#03c75a; color:white; padding:6px 8px; text-decoration:none; border-radius:4px; font-size:13px; }
+    footer { position: absolute; left:0; right:0; bottom:0; text-align:center; padding:6px; font-size:12px; color:#666; background:rgba(255,255,255,0.9); }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div class="topbar">서울 전통·특색 카페 지도<br><small>목록을 클릭하면 지도에서 표시됩니다. 각 항목에서 네이버 지도로 이동할 수 있습니다.</small></div>
+    <input id="filter" class="search" placeholder="카페 이름으로 필터 (예: 을지다방)" />
+    <div id="list"></div>
+    <hr>
+    <div style="font-size:12px;color:#444">파일: <strong>index.html</strong> — GitHub에 업로드하여 호스팅 가능 (예: GitHub Pages)</div>
+  </div>
+
+  <div id="map"></div>
+
+  <footer>제작: 사용자 제공 목록 기반 / 지도 언어: 한국어 • 이미지: 예시 이미지(사용자가 원하면 각 장소 사진으로 교체하세요)</footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1j8Hk0kQb3e9mWQmKQ1kQp1sKQ1r4u1q3k1jv0C4=" crossorigin=""></script>
+  <script>
+    // 사용자 제공 장소 목록 (원본 이름 그대로)
+    const places = [
+"을지다방","커피한약방","세운나다방","학림다방","맛남다방","커피 문화사","금성다방","대오서점","나무새 찻집","천장지구","백조다방","차마시는뜰","자작나무 이야기","낙원역","커피 한잔","머무름","인사동 찻집","아부 커피","한옥 카페","아마츄어 작업실 광장시장점","Le labo","Onion cafe","Waoak Bar","수연산방","서화커피","Haus coffee","오제도","한옥 찻집","ium1966","새소리물소리"
+    ];
+
+    // 중앙을 서울 시청 근처로 설정
+    const map = L.map('map').setView([37.5665, 126.9780], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 간단한 대체 이미지(데이터 URL) — 사용자가 실제 사진으로 교체 가능
+    const placeholder = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="600" height="360">
+        <rect width="100%" height="100%" fill="#f3f3f3"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#999" font-family="Noto Sans, Malgun Gothic, sans-serif" font-size="24">사진을 준비 중입니다</text>
+      </svg>
+    `);
+
+    // 자동으로 지도에 표시될 임시 좌표 (서울 중심을 조금씩 변형) — 실제 위치는 네이버 지도 링크로 확인하세요
+    const baseLat = 37.5665;
+    const baseLng = 126.9780;
+
+    // 마커와 리스트를 동기화
+    const markers = [];
+    const listEl = document.getElementById('list');
+
+    places.forEach((name, i) => {
+      // 원형으로 좌표 배치 (간단한 방법 — 실제 좌표는 네이버 지도로 이동하세요)
+      const angle = i * 0.5;
+      const lat = baseLat + (Math.cos(angle) * 0.018);
+      const lng = baseLng + (Math.sin(angle) * 0.018);
+
+      // 네이버 지도 검색 링크 (개별 장소 페이지가 있으면 유저가 더 상세히 확인 가능)
+      const naverSearch = 'https://map.naver.com/v5/search/' + encodeURIComponent(name);
+
+      // 간단한 한국어 설명 (사용자가 원하면 각 장소별 실제 설명으로 대체 가능)
+      const description = `${name} — 전통적·특색 있는 분위기의 카페/다방입니다. 자세한 위치, 리뷰, 사진은 네이버 지도를 눌러 확인하세요.`;
+
+      const popupHtml = `
+        <div style="width:220px">
+          <img class="popup-img" src="${placeholder}" alt="${name} 사진" />
+          <h3 style="margin:0 0 6px 0">${name}</h3>
+          <div style="font-size:13px;color:#333">${description}</div>
+          <a class="naver-link" href="${naverSearch}" target="_blank" rel="noopener">네이버지도에서 보기</a>
+        </div>
+      `;
+
+      const marker = L.marker([lat,lng]).addTo(map).bindPopup(popupHtml);
+      markers.push(marker);
+
+      // 리스트 항목
+      const item = document.createElement('div');
+      item.className = 'place';
+      item.innerHTML = `
+        <div style="display:flex; align-items:center;">
+          <img src="${placeholder}" alt="${name} 사진" />
+          <div style="flex:1">
+            <h4>${name}</h4>
+            <p>${description}</p>
+          </div>
+        </div>
+      `;
+      item.onclick = () => {
+        map.setView([lat,lng], 16);
+        marker.openPopup();
+      };
+      listEl.appendChild(item);
+    });
+
+    // 필터 기능
+    const filterInput = document.getElementById('filter');
+    filterInput.addEventListener('input', () => {
+      const q = filterInput.value.trim().toLowerCase();
+      listEl.innerHTML = '';
+      markers.forEach(m => map.removeLayer(m)); // 간단히 지우고 다시 추가
+      markers.length = 0;
+      let idx = 0;
+      places.forEach((name, i) => {
+        if (!q || name.toLowerCase().includes(q)) {
+          const angle = idx * 0.5;
+          const lat = baseLat + (Math.cos(angle) * 0.018);
+          const lng = baseLng + (Math.sin(angle) * 0.018);
+          const naverSearch = 'https://map.naver.com/v5/search/' + encodeURIComponent(name);
+          const description = `${name} — 전통적·특색 있는 분위기의 카페/다방입니다. 자세한 위치, 리뷰, 사진은 네이버 지도를 눌러 확인하세요.`;
+          const popupHtml = `
+            <div style="width:220px">
+              <img class="popup-img" src="${placeholder}" alt="${name} 사진" />
+              <h3 style="margin:0 0 6px 0">${name}</h3>
+              <div style="font-size:13px;color:#333">${description}</div>
+              <a class="naver-link" href="${naverSearch}" target="_blank" rel="noopener">네이버지도에서 보기</a>
+            </div>
+          `;
+          const m = L.marker([lat,lng]).addTo(map).bindPopup(popupHtml);
+          markers.push(m);
+
+          // 리스트 항목 생성
+          const item = document.createElement('div');
+          item.className = 'place';
+          item.innerHTML = `
+            <div style="display:flex; align-items:center;">
+              <img src="${placeholder}" alt="${name} 사진" />
+              <div style="flex:1">
+                <h4>${name}</h4>
+                <p>${description}</p>
+              </div>
+            </div>
+          `;
+          item.onclick = () => { map.setView([lat,lng], 16); m.openPopup(); };
+          listEl.appendChild(item);
+          idx++;
+        }
+      });
+    });
+
+  </script>
+</body>
+</html>
